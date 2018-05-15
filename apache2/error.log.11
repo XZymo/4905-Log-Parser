@@ -1,0 +1,7 @@
+[Sat Apr 28 06:25:02.883806 2018] [ssl:warn] [pid 5478] AH01909: nspw.ccsl.carleton.ca:443:0 server certificate does NOT include an ID which matches the server name
+[Sat Apr 28 06:25:02.884147 2018] [mpm_prefork:notice] [pid 5478] AH00163: Apache/2.4.29 (Ubuntu) OpenSSL/1.1.0g configured -- resuming normal operations
+[Sat Apr 28 06:25:02.884162 2018] [core:notice] [pid 5478] AH00094: Command line: '/usr/sbin/apache2'
+[Sat Apr 28 07:41:58.824304 2018] [autoindex:error] [pid 14554] [client 77.88.47.40:61126] AH01276: Cannot serve directory /var/www/html/2009/proceedings/: No matching DirectoryIndex (index.php,index.html,index.htm,index.shtml) found, and server-generated directory index forbidden by Options directive
+[Sat Apr 28 15:50:03.164585 2018] [autoindex:error] [pid 16271] [client 5.255.250.67:38338] AH01276: Cannot serve directory /var/www/html/2007/tmp/: No matching DirectoryIndex (index.php,index.html,index.htm,index.shtml) found, and server-generated directory index forbidden by Options directive
+[Sun Apr 29 05:53:20.959510 2018] [autoindex:error] [pid 18388] [client 66.249.73.89:59916] AH01276: Cannot serve directory /var/www/html/2007/cfp/: No matching DirectoryIndex (index.php,index.html,index.htm,index.shtml) found, and server-generated directory index forbidden by Options directive
+[Sun Apr 29 06:25:02.806595 2018] [mpm_prefork:notice] [pid 5478] AH00171: Graceful restart requested, doing restart

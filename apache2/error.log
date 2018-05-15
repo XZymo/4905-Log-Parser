@@ -1,0 +1,4 @@
+[Wed May 09 06:25:03.141888 2018] [ssl:warn] [pid 29701] AH01909: nspw.ccsl.carleton.ca:443:0 server certificate does NOT include an ID which matches the server name
+[Wed May 09 06:25:03.142197 2018] [mpm_prefork:notice] [pid 29701] AH00163: Apache/2.4.29 (Ubuntu) OpenSSL/1.1.0g configured -- resuming normal operations
+[Wed May 09 06:25:03.142213 2018] [core:notice] [pid 29701] AH00094: Command line: '/usr/sbin/apache2'
+[Wed May 09 07:38:32.039273 2018] [autoindex:error] [pid 3603] [client 194.187.170.103:21052] AH01276: Cannot serve directory /var/www/html/2006/cfp/: No matching DirectoryIndex (index.php,index.html,index.htm,index.shtml) found, and server-generated directory index forbidden by Options directive
