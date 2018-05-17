@@ -32,6 +32,9 @@ function access_parse(log, window_mins, callback){
 	var set_index = 0;
 	var slice = {};
 	var slice_start = null;
+	var cmp_score = [];
+	var cmp_string = "";
+	var cmp_string2 = "";
 	
 	for(i in log) {
 		if (log[i] == "") break;
@@ -56,20 +59,31 @@ function access_parse(log, window_mins, callback){
 		var payload = parsed_log[2]+" "+parsed_log[3]+" "+parsed_log[5]+" "+parsed_log[6]+" "+parsed_log[7]+" "+parsed_log[8]+" "+parsed_log[9];
 			
 		if (slice_start == null){
-			slice[datetime] = ip+" "+payload;
+			cmp_string = slice[datetime] = ip+" "+payload;
 			slice_start = datetime;
 		} else {
 			if (diff_minutes(slice_start,datetime) <= window_mins){
 				slice[datetime] = ip+" "+payload;
+				cmp_string += ip+" "+payload;
 			} else {
 				dataset[++set_index] = slice;
 				slice = {};
 				slice[datetime] = ip+" "+payload;
 				slice_start = datetime;
+				
+				if (set_index % 2 == 0){
+					cmp_score[set_index-1] = stringSimilarity.compareTwoStrings(cmp_string, cmp_string2);
+					cmp_string = ip+" "+payload;
+					cmp_string2 = "";
+				} else {
+					cmp_string2 = cmp_string;
+					cmp_string = "";
+				}
 			}
 		}
 	}
 	if (Object.keys(slice).length != 0) dataset[++set_index] = slice;
+	console.log(cmp_score);
 	return dataset;
 }
 
@@ -106,7 +120,7 @@ function error_parse(log, window_mins, callback){
 var array = "";
 for(var i = 1; i<15; ++i){
 	array = array + fs.readFileSync('apache2/access.log.'+i).toString();
-//var array = fs.readFileSync('apache2/other_vhosts_access.log.1').toString().split("\n");
+	//array = array + fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
 }
 var data = access_parse(array.split("\n"),10);
 
@@ -131,14 +145,22 @@ for(i in data){
 		}
 		//var png = nGram(5)(data[i][j]);
 		var png = data[i][j].split(" ");
-		for(k in png)
-			freq_dict[png[k]] = ((freq_dict[png[k]] == null)) ? 1 : freq_dict[png[k]]+1;
+		for(k in png) freq_dict[png[k]] = ((freq_dict[png[k]] == null)) ? 1 : freq_dict[png[k]]+1;
+		
 	}
 }
 
+var items = Object.keys(freq_dict).map(function(payload) {
+    return [payload, freq_dict[payload]];
+});
+items.sort(function(first, second) {
+    return second[1] - first[1];
+});
+
+console.log(items);
 var len = Object.keys(freq_dict).length;
 for(i in freq_dict){
-	if (freq_dict[i] >=100) console.log(freq_dict[i]+"\t=\t% "+(freq_dict[i]/len)+"\t--> "+i);
+//	if (freq_dict[i] >=100) console.log(freq_dict[i]+"\t=\t% "+(freq_dict[i]/len)+"\t--> "+i);
 	for(x in errors){
 		for(y in errors[x]){
 			if (i.match(/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))/) != null)
@@ -148,5 +170,10 @@ for(i in freq_dict){
 		}
 	}
 }
-
-console.log(sus_ips);
+var items = Object.keys(sus_ips).map(function(ip) {
+    return [ip, sus_ips[ip]];
+});
+items.sort(function(first, second) {
+    return second[1] - first[1];
+});
+console.log(items);
