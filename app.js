@@ -4,7 +4,7 @@ var stringSimilarity = require('string-similarity');
 
 /** APACHE LOG FORMAT: 
 %h		IP address of the client (remote host)
-%l		The "hyphen" in the output indicates that the requested piece of information is not available.
+%l		the RFC 1413 identity of the client determined by identd on the clients machine. "-" indicates that the requested information is unavailable.
 %u		The userid of the person requesting the document as determined by HTTP authentication.
 %t		The time that the request was received. [day/month/year:hour:minute:second zone]
 %r		The request line from the client. "method_used requested_resource protocol_used" | "%m %U%q %H"
