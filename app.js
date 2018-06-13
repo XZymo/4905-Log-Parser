@@ -26,7 +26,7 @@ function diff_minutes(dt2, dt1) {
 	return Math.abs(Math.round(diff)); 
 }
 
-function access_parse(log, window_mins, callback){
+function access_parse(log, window_mins, maxloglen, callback){
 	var months = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11};		
 	var dataset = {};
 	var set_index = 0;
@@ -35,6 +35,7 @@ function access_parse(log, window_mins, callback){
 	var cmp_score = [];
 	var cmp_string = "";
 	var cmp_string2 = "";
+	var offsets = new Array(maxloglen);
 	
 	for(i in log) {
 		if (log[i] == "") break;
@@ -56,8 +57,8 @@ function access_parse(log, window_mins, callback){
 		//if (parsed_log[8].toLowerCase().includes("nspw") || parsed_log[8]=="-") continue;
 		//if (parsed_log[9].toLowerCase().includes("bot")) continue;
 		
+		/**
 		var payload = parsed_log[2]+" "+parsed_log[3]+" "+parsed_log[5]+" "+parsed_log[6]+" "+parsed_log[7]+" "+parsed_log[8]+" "+parsed_log[9];
-			
 		if (slice_start == null){
 			cmp_string = slice[datetime] = ip+" "+payload;
 			slice_start = datetime;
@@ -81,9 +82,66 @@ function access_parse(log, window_mins, callback){
 				}
 			}
 		}
+		/**/
+		// LEARNING STEP 1: Build offset word dictionary (Identify pn-grams)
+		var prev_index = 0;
+		/**
+		var buf = "";
+		var chr;
+		for (var x=0;x<log[i].length;++x){
+			chr = log[i].charAt(x);
+			if ("/\\ \"[]();:?".includes(chr)){
+				if (buf != ""){
+					if (offsets[prev_index]==null) offsets[prev_index]={};
+					offsets[prev_index][buf] = (offsets[prev_index][buf]==null)? 1: offsets[prev_index][buf]+1;
+					buf = "";
+				} else continue;
+			} else {
+				if (buf == "") prev_index = x;
+				buf += chr;
+			}
+		/**/
+		var parsed_log2 = log[i].split(/\/|\\|\s|\"|\[|\]|\(|\)|\;|\:|\?/);
+		for (var x=0;x<parsed_log2.length;++x){
+			var word = parsed_log2[x]+"";
+			if (word == "") continue;
+			var index = log[i].indexOf(word,prev_index);
+			prev_index = index+1;
+			if (offsets[index]==null) offsets[index]={};
+			offsets[index][word] = (offsets[index][word]==null)? 1: offsets[index][word]+1;
+		/**/
+		}
 	}
+	// LEARNING STEP 2: Calculate sigmas for evaluation
+	var sigmas = [];
+	for(i in offsets){
+		var words_found = Object.keys(offsets[i]).length;
+		console.log("index:\t"+i+"\twords found = "+words_found);
+		var total_words = 0;
+		for (w in offsets[i]){
+			console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
+			total_words += offsets[i][w];
+		}
+		sigmas[i] = total_words/words_found;
+		console.log("\tTotal count = "+total_words+"\n\t sigma: "+sigmas[i]);
+	}
+	//TEST SCAN/EVALUATE
+	var log_test = "131.107.174.143 - - [09/May/2018:14:04:35 -0400] \"-\" 408 3408 \"-\" \"-\""
+	var parsed_log3 = log_test.split(/\/|\\|\s|\"|\[|\]|\(|\)|\;|\:|\?/);
+	var prev_index = 0;
+	for (var x=0;x<parsed_log3.length;++x){
+		var word = parsed_log3[x]+"";
+		if (word == "") continue;
+		var index = log_test.indexOf(word,prev_index);
+		prev_index = index+1;
+		if (offsets[index][word]==null) console.log("UNSEEN WORD FOUND!:\t"+word+"\t@offset["+index+"]\n");
+		else console.log((offsets[index][word]>=sigmas[index])?"Common word found.:\t"+word+"\n":"Uncommon occurred!:\t"+word+"\n");
+	}
+
+	/**
 	if (Object.keys(slice).length != 0) dataset[++set_index] = slice;
 	console.log(cmp_score);
+	/**/
 	return dataset;
 }
 
@@ -122,7 +180,7 @@ for(var i = 1; i<15; ++i){
 	array = array + fs.readFileSync('apache2/access.log.'+i).toString();
 	//array = array + fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
 }
-var data = access_parse(array.split("\n"),10);
+var data = access_parse(array.split("\n"),10,10);
 
 var array = ""
 for(var i = 1; i<15; ++i){
@@ -130,7 +188,9 @@ for(var i = 1; i<15; ++i){
 }
 var errors = error_parse(array.split("\n"),10);
 
-//console.log(data);
+//array = fs.readFileSync('apache2/access.log.'+i).toString();
+/**
+console.log(data);
 var freq_dict = {};
 var sus_ips = {};
 for(i in data){
@@ -177,3 +237,4 @@ items.sort(function(first, second) {
     return second[1] - first[1];
 });
 console.log(items);
+/**/
