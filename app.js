@@ -25,63 +25,36 @@ function diff_minutes(dt2, dt1) {
 	var diff =(dt2.getTime() - dt1.getTime()) / 60000;
 	return Math.abs(Math.round(diff)); 
 }
+var colors = { 'R':'\x1b[31m%s\x1b[0m', 'G':'\x1b[32m%s\x1b[0m', 'B':'\x1b[36m%s\x1b[0m' }
+var months = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11};
+var regex = /\\|\s|\"|\[|\]|\(|\)|\;|\:|\?|,|'|=|%|\$|_|\+/;
+var journal = {};
 
-function access_parse(log, window_mins, maxloglen, callback){
-	var months = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11};		
-	var dataset = {};
-	var set_index = 0;
-	var slice = {};
-	var slice_start = null;
-	var cmp_score = [];
-	var cmp_string = "";
-	var cmp_string2 = "";
+function parse(log, maxloglen, callback){
 	var offsets = new Array(maxloglen);
-	
+	var timestamp;
 	for(i in log) {
 		if (log[i] == "") break;
-		var parsed_log = log[i].match(/(.*)\s(.*)\s(.*)\s\[(.*)\]\s\"(.*)\"\s(.*)\s(.*)\s\"(.*)\"\s\"(.*)\"/);
-		var ip = parsed_log[1];
-		var timestamp = parsed_log[4];
-		var year = timestamp.substring(7,11),
-			month = months[timestamp.substring(3,6)],
-			day = timestamp.substring(0,2),
-			hours = timestamp.substring(12,14),
-			minutes = timestamp.substring(15,17),
-			seconds = timestamp.substring(18,20),
-			datetime = new Date(year, month, day, hours, minutes, seconds);
-		
-		//if (!ip.includes("180.76.15")) continue;
-		//if (!parsed_log[5].includes("login")) continue;
-		//if (parsed_log[6] != "200") continue;
-		//if (parseInt(parsed_log[7])<=10000) continue;
-		//if (parsed_log[8].toLowerCase().includes("nspw") || parsed_log[8]=="-") continue;
-		//if (parsed_log[9].toLowerCase().includes("bot")) continue;
-		
-		/**
-		var payload = parsed_log[2]+" "+parsed_log[3]+" "+parsed_log[5]+" "+parsed_log[6]+" "+parsed_log[7]+" "+parsed_log[8]+" "+parsed_log[9];
-		if (slice_start == null){
-			cmp_string = slice[datetime] = ip+" "+payload;
-			slice_start = datetime;
+		/**/
+		// Access datestring format
+		var datestring = log[i].match(/\[([0-3]\d)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/((?:19|20)\d{2}):([0-2]\d):([0-5]\d):([0-5]\d)\s-([0-2]\d{3})\]/);
+		if (datestring!=null){
+			var year = datestring[3],
+				month = months[datestring[2]],
+				day = datestring[1],
+				hours = datestring[4],
+				minutes = datestring[5],
+				seconds = datestring[6];
+			timestamp = new Date(year, month, day, hours, minutes, seconds);
 		} else {
-			if (diff_minutes(slice_start,datetime) <= window_mins){
-				slice[datetime] = ip+" "+payload;
-				cmp_string += ip+" "+payload;
-			} else {
-				dataset[++set_index] = slice;
-				slice = {};
-				slice[datetime] = ip+" "+payload;
-				slice_start = datetime;
-				
-				if (set_index % 2 == 0){
-					cmp_score[set_index-1] = stringSimilarity.compareTwoStrings(cmp_string, cmp_string2);
-					cmp_string = ip+" "+payload;
-					cmp_string2 = "";
-				} else {
-					cmp_string2 = cmp_string;
-					cmp_string = "";
-				}
-			}
+		// Error datestring format
+			datestring = log[i].match(/\[((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s[0-3]\d\s[0-5]\d:[0-5]\d:[0-5]\d.\d{6}\s(?:19|20)\d{2})\]/);
+			timestamp = new Date(datestring[1]);
 		}
+		var month_day = timestamp.getMonth()+"-"+timestamp.getDate()+"-"+timestamp.getHours();
+		if (journal[month_day] == null) journal[month_day] = [];
+		if (!journal[month_day].includes(log[i])) journal[month_day].push(log[i]);
+		
 		/**/
 		// LEARNING STEP 1: Build offset word dictionary (Identify pn-grams)
 		var prev_index = 0;
@@ -89,8 +62,9 @@ function access_parse(log, window_mins, maxloglen, callback){
 		var buf = "";
 		var chr;
 		for (var x=0;x<log[i].length;++x){
-			chr = log[i].charAt(x);
-			if ("/\\ \"[]();:?".includes(chr)){
+			//if (x > maxloglen) break;
+			chr = String.fromCharCode(log[i].charCodeAt(x));
+			if ("/ \\\"[]();:?,".includes(chr)){
 				if (buf != ""){
 					if (offsets[prev_index]==null) offsets[prev_index]={};
 					offsets[prev_index][buf] = (offsets[prev_index][buf]==null)? 1: offsets[prev_index][buf]+1;
@@ -101,12 +75,12 @@ function access_parse(log, window_mins, maxloglen, callback){
 				buf += chr;
 			}
 		/**/
-		var parsed_log2 = log[i].split(/\/|\\|\s|\"|\[|\]|\(|\)|\;|\:|\?/);
-		for (var x=0;x<parsed_log2.length;++x){
-			var word = parsed_log2[x]+"";
+		var buf = log[i].split(regex);
+		for (var x = 0; x < buf.length; ++x){
+			var word = buf[x]+"";
 			if (word == "") continue;
 			var index = log[i].indexOf(word,prev_index);
-			prev_index = index+1;
+			prev_index = index+word.length-1;
 			if (offsets[index]==null) offsets[index]={};
 			offsets[index][word] = (offsets[index][word]==null)? 1: offsets[index][word]+1;
 		/**/
@@ -114,127 +88,93 @@ function access_parse(log, window_mins, maxloglen, callback){
 	}
 	// LEARNING STEP 2: Calculate sigmas for evaluation
 	var sigmas = [];
+	var dictionary = {};
 	for(i in offsets){
 		var words_found = Object.keys(offsets[i]).length;
-		console.log("index:\t"+i+"\twords found = "+words_found);
+		//console.log("Index:\t"+i+"\n  Words found = "+words_found);
 		var total_words = 0;
 		for (w in offsets[i]){
-			console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
+			//console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
 			total_words += offsets[i][w];
+			if (dictionary[w] == null) dictionary[w]=[];
+			if (!dictionary[w].includes(i)) dictionary[w].push(i);
 		}
 		sigmas[i] = total_words/words_found;
-		console.log("\tTotal count = "+total_words+"\n\t sigma: "+sigmas[i]);
+		//console.log("  Total count = "+total_words+"\n  Sigma: "+sigmas[i]);
 	}
-	//TEST SCAN/EVALUATE
-	var log_test = "131.107.174.143 - - [09/May/2018:14:04:35 -0400] \"-\" 408 3408 \"-\" \"-\""
-	var parsed_log3 = log_test.split(/\/|\\|\s|\"|\[|\]|\(|\)|\;|\:|\?/);
-	var prev_index = 0;
-	for (var x=0;x<parsed_log3.length;++x){
-		var word = parsed_log3[x]+"";
-		if (word == "") continue;
-		var index = log_test.indexOf(word,prev_index);
-		prev_index = index+1;
-		if (offsets[index][word]==null) console.log("UNSEEN WORD FOUND!:\t"+word+"\t@offset["+index+"]\n");
-		else console.log((offsets[index][word]>=sigmas[index])?"Common word found.:\t"+word+"\n":"Uncommon occurred!:\t"+word+"\n");
-	}
-
-	/**
-	if (Object.keys(slice).length != 0) dataset[++set_index] = slice;
-	console.log(cmp_score);
-	/**/
-	return dataset;
+	//console.log(dictionary);
+	return [offsets, sigmas];
 }
 
-function error_parse(log, window_mins, callback){
-	var dataset = {};
-	var set_index = 0;
-	var slice = {};
-	var slice_start = null;
-	
+function scan(log, model, sigmas, callback){
+	//TEST SCAN/EVALUATE
+	var common = [];
+	var anomaly = [];
+	var count = 0;
 	for(i in log) {
 		if (log[i] == "") break;
-		var parsed_log = log[i].match(/\[(.*)\]\s\[(.*)\]\s\[pid\s(\d{5}|\d{4}|\d{3})\]\s(.*)/);
-		var timestamp = new Date(parsed_log[1]);
-		var payload = parsed_log[2]+" "+parsed_log[3]+" "+parsed_log[4];
-		
-		if (slice_start == null){
-			slice[log[i].match(/(\d{2}\:\d{2}\:\d{2}\.\d{6})/)[1]] = payload;
-			slice_start = timestamp;
-		} else {
-			if (diff_minutes(slice_start,timestamp) <= window_mins){
-				slice[log[i].match(/(\d{2}\:\d{2}\:\d{2}\.\d{6})/)[1]] = payload;
+		//console.log("\n================== Log"+(++count)+" Report ==================\n");
+		var buf = log[i].split(regex);
+		var prev_index = 0;
+		var score = 0;
+		var size = 0;
+		for (var x = 0; x < buf.length; ++x){
+			var word = buf[x]+"";
+			if (word == "") continue;
+			else ++size;
+			if (size == 10) console.log(word);
+			var index = log[i].indexOf(word,prev_index);
+			prev_index = index+1;
+			if (model[index]==null || model[index][word]==null){
+				//console.log(colors['R'],"UNSEEN WORD FOUND!:\t@offset["+index+"]\t"+word+"\n");
+				score -= 1;
 			} else {
-				dataset[++set_index] = slice;
-				slice = {};
-				slice[log[i].match(/(\d{2}\:\d{2}\:\d{2}\.\d{6})/)[1]] = payload;
-				slice_start = timestamp;
+				if (model[index][word] >= sigmas[index]){
+					//console.log(colors['G'],"Common word found.:\t@offset["+index+"]\t"+word+"\n");
+					score += 1;
+				} //else console.log(colors['B'] ,"Uncommon occurred!:\t@offset["+index+"]\t"+word+"\n");
 			}
 		}
+		if (score/size>=0.66) common.push(log[i]);
+		else anomaly.push(log[i]);
 	}
-	if (Object.keys(slice).length != 0) dataset[++set_index] = slice;
-	return dataset;
+	var len = Math.log(count) * Math.LOG10E + 1 | 0;
+	//var str = "=================================================";
+	//for (var c = 0; c < len-1; ++c) str+= "=";
+	/**
+	//console.log(str+"\n");
+	console.log("COMMONS\n");
+	for (i in common) console.log(i+"\t"+common[i]);
+	console.log("ANOMALIES\n");
+	for (i in anomaly) console.log(i+"\t"+anomaly[i]);
+	/**/
 }
 
-var array = "";
+var log_length = 2048;
+
+var input_access = "";
+var input_other_vhosts_access = "";
+var input_error = "";
+
 for(var i = 1; i<15; ++i){
-	array = array + fs.readFileSync('apache2/access.log.'+i).toString();
-	//array = array + fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
-}
-var data = access_parse(array.split("\n"),10,10);
-
-var array = ""
-for(var i = 1; i<15; ++i){
-	array = array + fs.readFileSync('apache2/error.log.'+i).toString();
-}
-var errors = error_parse(array.split("\n"),10);
-
-//array = fs.readFileSync('apache2/access.log.'+i).toString();
-/**
-console.log(data);
-var freq_dict = {};
-var sus_ips = {};
-for(i in data){
-	for(j in data[i]){
-		for(x in errors){
-			var ip = data[i][j].match(/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))/)[1];
-			for(y in errors[x]){
-				if (errors[x][y].includes(ip)){
-					sus_ips[ip] = (sus_ips[ip] == null)? 1: sus_ips[ip]+1;
-				}
-			}
-		}
-		//var png = nGram(5)(data[i][j]);
-		var png = data[i][j].split(" ");
-		for(k in png) freq_dict[png[k]] = ((freq_dict[png[k]] == null)) ? 1 : freq_dict[png[k]]+1;
-		
-	}
+	input_access += fs.readFileSync('apache2/access.log.'+i).toString();
+	input_other_vhosts_access += fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
+	input_error += fs.readFileSync('apache2/error.log.'+i).toString();
 }
 
-var items = Object.keys(freq_dict).map(function(payload) {
-    return [payload, freq_dict[payload]];
-});
-items.sort(function(first, second) {
-    return second[1] - first[1];
-});
+var test_access = fs.readFileSync('apache2/access.log').toString().split("\n");
+var test_other_vhosts_access = fs.readFileSync('apache2/other_vhosts_access.log').toString().split("\n");
+var test_error = fs.readFileSync('apache2/error.log').toString().split("\n");
 
-console.log(items);
-var len = Object.keys(freq_dict).length;
-for(i in freq_dict){
-//	if (freq_dict[i] >=100) console.log(freq_dict[i]+"\t=\t% "+(freq_dict[i]/len)+"\t--> "+i);
-	for(x in errors){
-		for(y in errors[x]){
-			if (i.match(/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))/) != null)
-			if (errors[x][y].includes(ip)){
-				sus_ips[ip] = (sus_ips[ip] == null)? 1: sus_ips[ip]+1;
-			}
-		}
-	}
-}
-var items = Object.keys(sus_ips).map(function(ip) {
-    return [ip, sus_ips[ip]];
-});
-items.sort(function(first, second) {
-    return second[1] - first[1];
-});
-console.log(items);
-/**/
+var mod_sig_a = parse(input_access.split("\n"),log_length);
+var mod_sig_o = parse(input_other_vhosts_access.split("\n"),log_length);
+var mod_sig_e = parse(input_error.split("\n"),log_length);
+
+console.log("\n\tACCESS LOGS\n\t-----------");
+scan(test_access, mod_sig_a[0], mod_sig_a[1]);
+console.log("\n\tOTHER_VHOSTS LOGS\n\t-----------------");
+scan(test_other_vhosts_access, mod_sig_o[0], mod_sig_o[1]);
+console.log("\n\tERROR LOGS\n\t----------");
+scan(test_error, mod_sig_e[0], mod_sig_e[1]);
+
+//console.log(journal);
