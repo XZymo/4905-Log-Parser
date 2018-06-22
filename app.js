@@ -25,16 +25,26 @@ function diff_minutes(dt2, dt1) {
 	var diff =(dt2.getTime() - dt1.getTime()) / 60000;
 	return Math.abs(Math.round(diff)); 
 }
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]]; // eslint-disable-line no-param-reassign
+    }
+}
+
 var colors = { 'R':'\x1b[31m%s\x1b[0m', 'G':'\x1b[32m%s\x1b[0m', 'B':'\x1b[36m%s\x1b[0m' }
 var months = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11};
-var regex = /\\|\s|\"|\[|\]|\(|\)|\;|\:|\?|,|'|=|%|\$|_|\+/;
+var regex = /\/|\\|\s|\"|\[|\]|\(|\)|\;|\:|\?|,|'|=|%|\$|_|\+/;
 var journal = {};
 
 function parse(log, maxloglen, callback){
 	var offsets = new Array(maxloglen);
 	var timestamp;
+	var count = 0;
 	for(i in log) {
 		if (log[i] == "") break;
+		else ++count;
 		/**/
 		// Access datestring format
 		var datestring = log[i].match(/\[([0-3]\d)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/((?:19|20)\d{2}):([0-2]\d):([0-5]\d):([0-5]\d)\s-([0-2]\d{3})\]/);
@@ -86,27 +96,27 @@ function parse(log, maxloglen, callback){
 		/**/
 		}
 	}
-	// LEARNING STEP 2: Calculate sigmas for evaluation
-	var sigmas = [];
-	var dictionary = {};
+	// LEARNING STEP 2: Calculate frequencies and select random p-word w/ freq >= 50%
+	var freq = [];
 	for(i in offsets){
 		var words_found = Object.keys(offsets[i]).length;
-		//console.log("Index:\t"+i+"\n  Words found = "+words_found);
+		console.log("Index:\t"+i+"\n  Words found = "+words_found+" ===== "+count);
 		var total_words = 0;
 		for (w in offsets[i]){
-			//console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
+			if (offsets[i][w]/count >= 0.5){
+				console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
+				console.log(colors['R'],"\tfreq:\t"+(offsets[i][w]/count)+"\t"+w);
+				if (freq[i]==null) freq[i] = w;
+			}
 			total_words += offsets[i][w];
-			if (dictionary[w] == null) dictionary[w]=[];
-			if (!dictionary[w].includes(i)) dictionary[w].push(i);
 		}
-		sigmas[i] = total_words/words_found;
 		//console.log("  Total count = "+total_words+"\n  Sigma: "+sigmas[i]);
 	}
-	//console.log(dictionary);
-	return [offsets, sigmas];
+	console.log(freq);
+	return freq;
 }
 
-function scan(log, model, sigmas, callback){
+function scan(log, freq, callback){
 	//TEST SCAN/EVALUATE
 	var common = [];
 	var anomaly = [];
@@ -114,29 +124,14 @@ function scan(log, model, sigmas, callback){
 	for(i in log) {
 		if (log[i] == "") break;
 		//console.log("\n================== Log"+(++count)+" Report ==================\n");
-		var buf = log[i].split(regex);
-		var prev_index = 0;
-		var score = 0;
-		var size = 0;
-		for (var x = 0; x < buf.length; ++x){
-			var word = buf[x]+"";
-			if (word == "") continue;
-			else ++size;
-			if (size == 10) console.log(word);
-			var index = log[i].indexOf(word,prev_index);
-			prev_index = index+1;
-			if (model[index]==null || model[index][word]==null){
-				//console.log(colors['R'],"UNSEEN WORD FOUND!:\t@offset["+index+"]\t"+word+"\n");
-				score -= 1;
-			} else {
-				if (model[index][word] >= sigmas[index]){
-					//console.log(colors['G'],"Common word found.:\t@offset["+index+"]\t"+word+"\n");
-					score += 1;
-				} //else console.log(colors['B'] ,"Uncommon occurred!:\t@offset["+index+"]\t"+word+"\n");
-			}
+		for(j in freq){
+			if (log[i].substring(j,parseInt(j)+freq[j].length) != freq[j])
+				console.log(colors['B'],log[i]);
+			else
+				console.log(colors['R'],log[i]);
+			break;
 		}
-		if (score/size>=0.66) common.push(log[i]);
-		else anomaly.push(log[i]);
+		/**/
 	}
 	var len = Math.log(count) * Math.LOG10E + 1 | 0;
 	//var str = "=================================================";
@@ -156,7 +151,7 @@ var input_access = "";
 var input_other_vhosts_access = "";
 var input_error = "";
 
-for(var i = 1; i<15; ++i){
+for(var i = 1; i<2; ++i){
 	input_access += fs.readFileSync('apache2/access.log.'+i).toString();
 	input_other_vhosts_access += fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
 	input_error += fs.readFileSync('apache2/error.log.'+i).toString();
@@ -166,15 +161,14 @@ var test_access = fs.readFileSync('apache2/access.log').toString().split("\n");
 var test_other_vhosts_access = fs.readFileSync('apache2/other_vhosts_access.log').toString().split("\n");
 var test_error = fs.readFileSync('apache2/error.log').toString().split("\n");
 
-var mod_sig_a = parse(input_access.split("\n"),log_length);
-var mod_sig_o = parse(input_other_vhosts_access.split("\n"),log_length);
-var mod_sig_e = parse(input_error.split("\n"),log_length);
-
+var freq_a = parse(input_access.split("\n"),log_length);
+//var freq_o = parse(input_other_vhosts_access.split("\n"),log_length);
+//var freq_e = parse(input_error.split("\n"),log_length);
+/**/
 console.log("\n\tACCESS LOGS\n\t-----------");
-scan(test_access, mod_sig_a[0], mod_sig_a[1]);
-console.log("\n\tOTHER_VHOSTS LOGS\n\t-----------------");
-scan(test_other_vhosts_access, mod_sig_o[0], mod_sig_o[1]);
-console.log("\n\tERROR LOGS\n\t----------");
-scan(test_error, mod_sig_e[0], mod_sig_e[1]);
-
-//console.log(journal);
+scan(input_access.split("\n"), freq_a);
+//console.log("\n\tOTHER_VHOSTS LOGS\n\t-----------------");
+//scan(test_other_vhosts_access, freq_o);
+//console.log("\n\tERROR LOGS\n\t----------");
+//scan(test_error, freq_e);
+/**/
