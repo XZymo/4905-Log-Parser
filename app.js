@@ -19,7 +19,12 @@ Ex.:
 	http://guidetodatamining.com/ngramAnalyzer/
 **/
 
-
+// Binary tree node
+function Node(val){
+  this.value = val;
+  this.left = null;
+  this.right = null;
+}
 
 function diff_minutes(dt2, dt1) {
 	var diff =(dt2.getTime() - dt1.getTime()) / 60000;
@@ -33,19 +38,64 @@ function shuffle(array) {
     }
 }
 
+function selectRandom(obj) {
+	var keys = Object.keys(obj),
+		i = keys.length * Math.random() << 0;
+	return [keys[i],obj[keys[i]]];
+}
+
 var colors = { 'R':'\x1b[31m%s\x1b[0m', 'G':'\x1b[32m%s\x1b[0m', 'B':'\x1b[36m%s\x1b[0m' }
 var months = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11};
 var regex = /\/|\\|\s|\"|\[|\]|\(|\)|\;|\:|\?|,|'|=|%|\$|_|\+/;
 var journal = {};
 
+function scan(log, freq, callback){
+	//TEST SCAN/EVALUATE
+	var common = [];
+	var anomaly = [];
+	var count = 0;
+	// Pick random frequent p-word
+	var j = selectRandom(freq);
+	//console.log(j);
+	
+	for(i in log) {
+		if (log[i] == "") break;
+		//console.log("\n================== Log"+(++count)+" Report ==================\n");
+		if (log[i].substring(j[0],parseInt(j[0])+j[1].length) != j[1]){
+			if (!common.includes(log[i])) {
+				common.push(log[i]);
+			}
+		}else{
+			if (!anomaly.includes(log[i])) {
+				anomaly.push(log[i]);
+			}
+		}
+		/**/
+	}
+	var len = Math.log(count) * Math.LOG10E + 1 | 0;
+	//var str = "=================================================";
+	//for (var c = 0; c < len-1; ++c) str+= "=";
+	/**
+	//console.log(str+"\n");
+	console.log("COMMONS\n");
+	for (i in common) console.log(colors['B'],i+"\t"+common[i]);
+	console.log("ANOMALIES\n");
+	for (i in anomaly) console.log(colors['R'],i+"\t"+anomaly[i]);
+	/**/
+	return [common,anomaly];
+}
+
 function parse(log, maxloglen, callback){
 	var offsets = new Array(maxloglen);
+	var root = new Node(log);
+	// Binary tree model
+	if (log.length<=15) return root;
 	var timestamp;
 	var count = 0;
 	for(i in log) {
 		if (log[i] == "") break;
 		else ++count;
-		/**/
+		/**
 		// Access datestring format
 		var datestring = log[i].match(/\[([0-3]\d)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/((?:19|20)\d{2}):([0-2]\d):([0-5]\d):([0-5]\d)\s-([0-2]\d{3})\]/);
 		if (datestring!=null){
@@ -73,7 +123,7 @@ function parse(log, maxloglen, callback){
 		var chr;
 		for (var x=0;x<log[i].length;++x){
 			//if (x > maxloglen) break;
-			chr = String.fromCharCode(log[i].charCodeAt(x));
+			chr = log[i].charAt(x);
 			if ("/ \\\"[]();:?,".includes(chr)){
 				if (buf != ""){
 					if (offsets[prev_index]==null) offsets[prev_index]={};
@@ -97,52 +147,49 @@ function parse(log, maxloglen, callback){
 		}
 	}
 	// LEARNING STEP 2: Calculate frequencies and select random p-word w/ freq >= 50%
-	var freq = [];
+	var freq = {};
+	var frequency = 0.5;
+	var found_check = false;
 	for(i in offsets){
-		var words_found = Object.keys(offsets[i]).length;
-		console.log("Index:\t"+i+"\n  Words found = "+words_found+" ===== "+count);
+		//var words_found = Object.keys(offsets[i]).length;
+		//console.log("Index:\t"+i+"\n  Words found = "+words_found);
 		var total_words = 0;
 		for (w in offsets[i]){
-			if (offsets[i][w]/count >= 0.5){
-				console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
-				console.log(colors['R'],"\tfreq:\t"+(offsets[i][w]/count)+"\t"+w);
+			if (offsets[i][w]/count >= frequency && offsets[i][w]/count < 1.0){
+				//console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
+				//console.log(colors['R'],"\tfreq:\t"+(offsets[i][w]/count)+"\t"+w);
 				if (freq[i]==null) freq[i] = w;
+				found_check = true;
 			}
 			total_words += offsets[i][w];
 		}
-		//console.log("  Total count = "+total_words+"\n  Sigma: "+sigmas[i]);
+		//console.log("  Total count = "+total_words);
 	}
-	console.log(freq);
-	return freq;
-}
-
-function scan(log, freq, callback){
-	//TEST SCAN/EVALUATE
-	var common = [];
-	var anomaly = [];
-	var count = 0;
-	for(i in log) {
-		if (log[i] == "") break;
-		//console.log("\n================== Log"+(++count)+" Report ==================\n");
-		for(j in freq){
-			if (log[i].substring(j,parseInt(j)+freq[j].length) != freq[j])
-				console.log(colors['B'],log[i]);
-			else
-				console.log(colors['R'],log[i]);
-			break;
-		}
-		/**/
-	}
-	var len = Math.log(count) * Math.LOG10E + 1 | 0;
-	//var str = "=================================================";
-	//for (var c = 0; c < len-1; ++c) str+= "=";
 	/**
-	//console.log(str+"\n");
-	console.log("COMMONS\n");
-	for (i in common) console.log(i+"\t"+common[i]);
-	console.log("ANOMALIES\n");
-	for (i in anomaly) console.log(i+"\t"+anomaly[i]);
+	while (!found_check){
+		var freq = {};
+		for(i in offsets){
+			for (w in offsets[i]){
+				if (offsets[i][w]/count >= frequency && offsets[i][w]/count < 1.0){
+					if (freq[i]==null) freq[i] = w;
+					found_check = true;
+				}
+			}
+		}
+		//console.log(colors['R'],frequency);
+		frequency -= 0.001;
+	}
 	/**/
+	// Build Model
+	if (found_check){
+		var log_split = scan(log, freq);
+		root.left = parse(log_split[0],maxloglen);
+		root.right = parse(log_split[1],maxloglen);
+		console.log(freq);
+	} else console.log(colors['R'],"BELOW THREASHOLD");
+	console.log(colors['B'],"COUNT:"+count);
+	if (count <= 100) console.log(log);
+	return root;
 }
 
 var log_length = 2048;
@@ -151,7 +198,7 @@ var input_access = "";
 var input_other_vhosts_access = "";
 var input_error = "";
 
-for(var i = 1; i<2; ++i){
+for(var i = 1; i<15; ++i){
 	input_access += fs.readFileSync('apache2/access.log.'+i).toString();
 	input_other_vhosts_access += fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
 	input_error += fs.readFileSync('apache2/error.log.'+i).toString();
@@ -161,14 +208,6 @@ var test_access = fs.readFileSync('apache2/access.log').toString().split("\n");
 var test_other_vhosts_access = fs.readFileSync('apache2/other_vhosts_access.log').toString().split("\n");
 var test_error = fs.readFileSync('apache2/error.log').toString().split("\n");
 
-var freq_a = parse(input_access.split("\n"),log_length);
+var tree = parse(input_access.split("\n"),log_length);
 //var freq_o = parse(input_other_vhosts_access.split("\n"),log_length);
 //var freq_e = parse(input_error.split("\n"),log_length);
-/**/
-console.log("\n\tACCESS LOGS\n\t-----------");
-scan(input_access.split("\n"), freq_a);
-//console.log("\n\tOTHER_VHOSTS LOGS\n\t-----------------");
-//scan(test_other_vhosts_access, freq_o);
-//console.log("\n\tERROR LOGS\n\t----------");
-//scan(test_error, freq_e);
-/**/
