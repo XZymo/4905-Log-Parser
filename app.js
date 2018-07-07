@@ -22,8 +22,38 @@ Ex.:
 // Binary tree node
 function Node(val){
   this.value = val;
+  this.p_word = null;
   this.left = null;
   this.right = null;
+}
+
+function height(tree){
+	if (tree == null) return 0;
+	return 1+Math.max(height(tree.left),height(tree.right));
+}
+
+function showTree(tree,layers=0){
+	var output = "", buffer = "";
+	if (tree == null) return output;
+	for (var i = layers; i > 0; --i) buffer+="\t";
+	var len = tree.value.length;
+	/**
+	if (tree.p_word == null){
+		for (x in tree.value){
+			output += buffer+tree.value[x]+"\n";
+		}
+	}
+	/**/
+	output += buffer+"Logs:\t"+len+"\n";
+	if (tree.p_word != null){
+		output += buffer+"Pos:\t"+tree.p_word[0]+"\n";
+		output += buffer+"Word:\t"+tree.p_word[1]+"\n";
+	}
+	if (tree.left != null)
+		output += buffer+"Present\n"+showTree(tree.left,1+layers);
+	if (tree.right != null)
+		output += buffer+"Missing\n"+showTree(tree.right,1+layers);
+	return output;
 }
 
 function diff_minutes(dt2, dt1) {
@@ -32,7 +62,7 @@ function diff_minutes(dt2, dt1) {
 }
 
 function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
+    for (let i = array.length - 1; i > 0; --i) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]]; // eslint-disable-line no-param-reassign
     }
@@ -44,12 +74,12 @@ function selectRandom(obj) {
 	return [keys[i],obj[keys[i]]];
 }
 
-var colors = { 'R':'\x1b[31m%s\x1b[0m', 'G':'\x1b[32m%s\x1b[0m', 'B':'\x1b[36m%s\x1b[0m' }
+var colors = { 'R':'\x1b[31m%s\x1b[0m', 'G':'\x1b[32m%s\x1b[0m', 'B':'\x1b[36m%s\x1b[0m', 'Y':'\x1b[33m%s\x1b[0m' }
 var months = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11};
 var regex = /\/|\\|\s|\"|\[|\]|\(|\)|\;|\:|\?|,|'|=|%|\$|_|\+/;
 var journal = {};
 
-function scan(log, freq, callback){
+function check(log, freq){
 	//TEST SCAN/EVALUATE
 	var common = [];
 	var anomaly = [];
@@ -60,8 +90,7 @@ function scan(log, freq, callback){
 	
 	for(i in log) {
 		if (log[i] == "") break;
-		//console.log("\n================== Log"+(++count)+" Report ==================\n");
-		if (log[i].substring(j[0],parseInt(j[0])+j[1].length) != j[1]){
+		if (log[i].substring(j[0],parseInt(j[0])+j[1].length) == j[1]){
 			if (!common.includes(log[i])) {
 				common.push(log[i]);
 			}
@@ -70,52 +99,25 @@ function scan(log, freq, callback){
 				anomaly.push(log[i]);
 			}
 		}
-		/**/
 	}
-	var len = Math.log(count) * Math.LOG10E + 1 | 0;
-	//var str = "=================================================";
-	//for (var c = 0; c < len-1; ++c) str+= "=";
 	/**
-	//console.log(str+"\n");
 	console.log("COMMONS\n");
 	for (i in common) console.log(colors['B'],i+"\t"+common[i]);
 	console.log("ANOMALIES\n");
 	for (i in anomaly) console.log(colors['R'],i+"\t"+anomaly[i]);
 	/**/
-	return [common,anomaly];
+	return [common,anomaly,j];
 }
 
-function parse(log, maxloglen, callback){
+function parse(log, maxloglen, minlognum){
 	var offsets = new Array(maxloglen);
 	var root = new Node(log);
 	// Binary tree model
-	if (log.length<=15) return root;
-	var timestamp;
+	if (log.length<=minlognum) return root;
 	var count = 0;
 	for(i in log) {
 		if (log[i] == "") break;
 		else ++count;
-		/**
-		// Access datestring format
-		var datestring = log[i].match(/\[([0-3]\d)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/((?:19|20)\d{2}):([0-2]\d):([0-5]\d):([0-5]\d)\s-([0-2]\d{3})\]/);
-		if (datestring!=null){
-			var year = datestring[3],
-				month = months[datestring[2]],
-				day = datestring[1],
-				hours = datestring[4],
-				minutes = datestring[5],
-				seconds = datestring[6];
-			timestamp = new Date(year, month, day, hours, minutes, seconds);
-		} else {
-		// Error datestring format
-			datestring = log[i].match(/\[((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s[0-3]\d\s[0-5]\d:[0-5]\d:[0-5]\d.\d{6}\s(?:19|20)\d{2})\]/);
-			timestamp = new Date(datestring[1]);
-		}
-		var month_day = timestamp.getMonth()+"-"+timestamp.getDate()+"-"+timestamp.getHours();
-		if (journal[month_day] == null) journal[month_day] = [];
-		if (!journal[month_day].includes(log[i])) journal[month_day].push(log[i]);
-		
-		/**/
 		// LEARNING STEP 1: Build offset word dictionary (Identify pn-grams)
 		var prev_index = 0;
 		/**
@@ -136,17 +138,18 @@ function parse(log, maxloglen, callback){
 			}
 		/**/
 		var buf = log[i].split(regex);
+		//var buf = log[i].match(/.{1,2}/g);
 		for (var x = 0; x < buf.length; ++x){
 			var word = buf[x]+"";
 			if (word == "") continue;
 			var index = log[i].indexOf(word,prev_index);
-			prev_index = index+word.length-1;
+			prev_index = index+word.length;
 			if (offsets[index]==null) offsets[index]={};
 			offsets[index][word] = (offsets[index][word]==null)? 1: offsets[index][word]+1;
 		/**/
 		}
 	}
-	// LEARNING STEP 2: Calculate frequencies and select random p-word w/ freq >= 50%
+	// LEARNING STEP 2: Calculate frequencies and select p-words w/ freq >= 50%
 	var freq = {};
 	var frequency = 0.5;
 	var found_check = false;
@@ -155,7 +158,7 @@ function parse(log, maxloglen, callback){
 		//console.log("Index:\t"+i+"\n  Words found = "+words_found);
 		var total_words = 0;
 		for (w in offsets[i]){
-			if (offsets[i][w]/count >= frequency && offsets[i][w]/count < 1.0){
+			if (offsets[i][w]/count >= frequency && offsets[i][w]/count <= 0.75){
 				//console.log("\toccurences:\t"+offsets[i][w]+"\t"+w);
 				//console.log(colors['R'],"\tfreq:\t"+(offsets[i][w]/count)+"\t"+w);
 				if (freq[i]==null) freq[i] = w;
@@ -165,34 +168,41 @@ function parse(log, maxloglen, callback){
 		}
 		//console.log("  Total count = "+total_words);
 	}
-	/**
-	while (!found_check){
-		var freq = {};
-		for(i in offsets){
-			for (w in offsets[i]){
-				if (offsets[i][w]/count >= frequency && offsets[i][w]/count < 1.0){
-					if (freq[i]==null) freq[i] = w;
-					found_check = true;
-				}
-			}
-		}
-		//console.log(colors['R'],frequency);
-		frequency -= 0.001;
-	}
-	/**/
-	// Build Model
+	
+	// LEARNING STEP 3: Build Model Recursively, randomly select p-word
 	if (found_check){
-		var log_split = scan(log, freq);
-		root.left = parse(log_split[0],maxloglen);
-		root.right = parse(log_split[1],maxloglen);
-		console.log(freq);
-	} else console.log(colors['R'],"BELOW THREASHOLD");
-	console.log(colors['B'],"COUNT:"+count);
-	if (count <= 100) console.log(log);
+		var log_split = check(log, freq);
+		root.left = parse(log_split[0],maxloglen,minlognum);
+		root.right = parse(log_split[1],maxloglen,minlognum);
+		root.p_word = log_split[2];
+	} //else console.log(colors['R'],"BELOW THREASHOLD");
+	//console.log(colors['B'],"COUNT:\t"+count);
 	return root;
 }
 
+function classify(log,tree){
+	for(i in log) {
+		if (log[i] == "") break;
+		var node = tree;
+		var str = "";
+		while (node.p_word!=null){
+			if (log[i].substring(node.p_word[0] ,parseInt(node.p_word[0])+node.p_word[1].length) == node.p_word[1]){
+				str += "\x1b[32m"+node.p_word+"\x1b[0m";
+				node = node.left;
+			} else {
+				str += "\x1b[31m"+node.p_word+"\x1b[0m";
+				node = node.right;
+			}
+			if (node.p_word!=null) str += " -> "
+		}
+		node.value.push(log[i]);
+		console.log(str);
+		//console.log(colors['Y'],log[i]);
+	}
+}
+
 var log_length = 2048;
+var min_num_logs = 5;
 
 var input_access = "";
 var input_other_vhosts_access = "";
@@ -208,6 +218,15 @@ var test_access = fs.readFileSync('apache2/access.log').toString().split("\n");
 var test_other_vhosts_access = fs.readFileSync('apache2/other_vhosts_access.log').toString().split("\n");
 var test_error = fs.readFileSync('apache2/error.log').toString().split("\n");
 
-var tree = parse(input_access.split("\n"),log_length);
-//var freq_o = parse(input_other_vhosts_access.split("\n"),log_length);
-//var freq_e = parse(input_error.split("\n"),log_length);
+console.log(colors['G'],"ACCESS LOGS\n-----------");
+var tree_a = parse(input_access.split("\n"),log_length,min_num_logs);
+console.log(showTree(tree_a)+"\nDEPTH:\t"+height(tree_a));
+classify(test_access,tree_a);
+console.log(colors['B'],"OTHERV LOGS\n-----------");
+var tree_o = parse(input_other_vhosts_access.split("\n"),log_length,min_num_logs);
+console.log(showTree(tree_o)+"\nDEPTH:\t"+height(tree_o));
+classify(test_other_vhosts_access,tree_o);
+console.log(colors['R'],"ERROR LOGS\n----------");
+var tree_e = parse(input_error.split("\n"),log_length,min_num_logs);
+console.log(showTree(tree_e)+"\nDEPTH:\t"+height(tree_a));
+classify(test_error,tree_e);
