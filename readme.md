@@ -35,25 +35,18 @@ The application will then display the execution of the algorithm, then notify th
 
 Due to lack of access to a real-time server and a larger volume of testing data, the application's input data must be hard coded for testing purposes. 
 
-### Access.log execution
+### Example Execution
 
-Explain what these tests test and why
+![alt text](https://github.com/XZymo/4905-Log-Parser/blob/master/shot1.png "Access Logs")
 
-```
-Give an example
-```
+![alt text](https://github.com/XZymo/4905-Log-Parser/blob/master/shot2.png "Access Logs")
 
-### Error.log execution
+![alt text](https://github.com/XZymo/4905-Log-Parser/blob/master/shot3.png "Logs: 43")
 
-Explain what these tests test and why
-
-```
-Give an example
-```
 
 ## Deployment
 
-For deployment, this app would require constant access to your server's event logs 
+For deployment, this app would require configuration for constant access to your server's event logs.
 
 ## Built With
 
@@ -68,7 +61,7 @@ This application was developed without any contributions other than that of the 
 
 ## Versioning
 
-No official release yet planned.
+See [package.json](https://github.com/XZymo/4905-Log-Parser/blob/master/package.json) for details.
 
 ## Author
 
@@ -78,7 +71,7 @@ See also the list of [contributors](https://github.com/XZymo/4905-Log-Parser/gra
 
 ## License
 
-N/A
+[ISC](https://en.wikipedia.org/wiki/ISC_license)
 
 ## Acknowledgments
 
