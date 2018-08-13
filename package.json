@@ -1,0 +1,22 @@
+{
+  "name": "4905-log-parser",
+  "version": "1.0.0",
+  "description": "ADHIC Decision Tree Monitor",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XZymo/4905-Log-Parser.git"
+  },
+  "author": "Daniel Fitzhenry",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/XZymo/4905-Log-Parser/issues"
+  },
+  "homepage": "https://github.com/XZymo/4905-Log-Parser#readme",
+  "dependencies": {
+    "express": "^4.16.3"
+  }
+}

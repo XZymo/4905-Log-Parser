@@ -1,6 +1,6 @@
 var fs = require('fs');
-var nGram = require('n-gram');
-var stringSimilarity = require('string-similarity');
+const express = require('express');
+const app = express();
 
 /** APACHE LOG FORMAT: 
 %h		IP address of the client (remote host)
@@ -23,8 +23,11 @@ Ex.:
 function Node(val){
   this.value = val;
   this.p_word = null;
+  this.parent = null;
   this.left = null;
   this.right = null;
+  // for classifying step
+  this.new_vals = 0;
 }
 
 function height(tree){
@@ -34,10 +37,57 @@ function height(tree){
 
 function leaves(tree){
 	var values = [];
+	if (tree == null) return values;
 	if (tree.p_word == null) return [tree.value];
 	values = values.concat(leaves(tree.left));
 	values = values.concat(leaves(tree.right));
 	return values;
+}
+
+function prune(tree,size,itr=0){
+	if (tree == null || size == 0) return;
+	if (tree.p_word != null){
+		if (tree.parent==null){
+			prune(tree.left,size,itr+1);
+			prune(tree.right,size,itr+1);
+		} else {
+			var node;
+			if (tree.left.new_vals == 0){
+				node = tree.right;
+				node.parent = tree.parent;
+				if (tree.parent.left === tree) tree.parent.left = node;
+				else tree.parent.right = node;
+				console.log(tree.p_word+" was removed, replaced (LEFT) with "+node.p_word);
+			} else if (tree.right.new_vals == 0){
+				node = tree.left;
+				node.parent = tree.parent;
+				//console.log(tree.parent+" "+tree.new_vals);
+				if (tree.parent.left === tree) tree.parent.left = node;
+				else tree.parent.right = node;
+				console.log(tree.p_word+" was removed, replaced (RIGHT) with "+node.p_word);
+			} else {
+				prune(tree.left,size,itr+1);
+				prune(tree.right,size,itr+1);
+			}
+			prune(node,size,itr+1);
+		}
+	} else {
+		console.log("LEAF -> "+tree.new_vals/size);
+		if (tree.new_vals/size > 0.02){
+			var str = tree.value.length+" logs split ";
+			shuffle(tree.value);
+			tree = parse(tree.value,2048,10);
+			console.log(str+((tree.p_word==null)?"Failed to identify (p,n)-gram.":"-> "+tree.p_word));
+		}
+	}
+	//console.log("itr = "+itr+" "+tree.p_word+" "+(tree.new_vals/size));
+}
+
+function reset(tree){
+	if (tree == null) return tree;
+	tree.new_vals = 0;
+	reset(tree.left);
+	reset(tree.right);
 }
 
 function toString(tree,layers=0){
@@ -76,9 +126,9 @@ function shuffle(array) {
     }
 }
 
-function selectRandom(obj) {
+function selectRandom(obj,flip) {
 	var keys = Object.keys(obj),
-		i = keys.length * Math.random() << 0,
+		i = (flip) ? keys.length-1 : keys.length*Math.random() << 0,
 		j = obj[keys[i]].length * Math.random() << 0;
 	return [keys[i],obj[keys[i]][j]];
 }
@@ -88,18 +138,19 @@ var months = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Au
 var regex = /(\\|\s|\"|\[|\]|\(|\)|\;|\:|\?|,|'|=|%|\$|_|\+|-|\/)/;
 var journal = {};
 
-function check(log, freq){
+function split(log, freq,flip){
 	//TEST SCAN/EVALUATE
 	var common = [];
 	var anomaly = [];
 	var count = 0;
 	// Pick random frequent p-word
-	var j = selectRandom(freq);
+	var j = selectRandom(freq,flip);
+	var len = j[1].length;
 	//console.log(j);
 	
 	for(i in log) {
 		if (log[i] == "") continue;
-		if (log[i].substring(j[0],parseInt(j[0])+j[1].length) == j[1]){
+		if (log[i].substring(j[0],parseInt(j[0])+len) == j[1]){
 			if (!common.includes(log[i])) {
 				common.push(log[i]);
 			}
@@ -118,7 +169,7 @@ function check(log, freq){
 	return [common,anomaly,j];
 }
 
-function parse(log, maxloglen, minlognum, frequency=0.5){
+function parse(log, maxloglen, minlognum, frequency=0.5, flip=false){
 	var offsets = new Array(maxloglen);
 	var root = new Node(log);
 	// Binary tree model
@@ -127,6 +178,7 @@ function parse(log, maxloglen, minlognum, frequency=0.5){
 	for(i in log) {
 		if (log[i] == "") continue;
 		else ++count;
+		//if (count == 1000) break;
 		// LEARNING STEP 1: Build offset word dictionary (Identify pn-grams)
 		var prev_index = 0;
 		/**
@@ -140,7 +192,9 @@ function parse(log, maxloglen, minlognum, frequency=0.5){
 					if (offsets[prev_index]==null) offsets[prev_index]={};
 					offsets[prev_index][buf] = (offsets[prev_index][buf]==null)? 1: offsets[prev_index][buf]+1;
 					buf = "";
-				} else continue;
+				}
+				if (offsets[x]==null) offsets[x]={};
+				offsets[x][chr] = (offsets[x][chr]==null)? 1: offsets[x][chr]+1;
 			} else {
 				if (buf == "") prev_index = x;
 				buf += chr;
@@ -168,7 +222,7 @@ function parse(log, maxloglen, minlognum, frequency=0.5){
 	for(i in offsets){
 		var total_words = 0;
 		for (w in offsets[i]){
-			if (offsets[i][w]/count >= frequency && offsets[i][w]/count <1){
+			if (offsets[i][w]/count >= frequency && offsets[i][w]/count <=0.66){
 				if (freq[i]==null) freq[i] = [w];
 				else freq[i].push(w);
 				found_check = true;
@@ -178,44 +232,55 @@ function parse(log, maxloglen, minlognum, frequency=0.5){
 	}
 	// LEARNING STEP 3: Build Model Recursively, randomly select p-word
 	if (found_check){
-		var log_split = check(log, freq);
-		root.left = parse(log_split[0],maxloglen,minlognum);
-		root.right = parse(log_split[1],maxloglen,minlognum);
+		var log_split = split(log, freq, flip);
+		root.left = parse(log_split[0],maxloglen,minlognum, frequency, flip);
+		root.right = parse(log_split[1],maxloglen,minlognum, frequency, flip);
 		root.p_word = log_split[2];
+		root.left.parent = root.right.parent = root;
 	} //else console.log(colors['R'],"BELOW THREASHOLD");
 	//console.log(colors['B'],"COUNT:\t"+count);
 	return root;
 }
 
 function classify(log,tree){
-	var sorted = {};
+	var timestamp,slice_start=null,slice_size=0;
 	for(i in log) {
 		if (log[i] == "") continue;
+		/**/
+		// Access datestring format
+		var datestring = log[i].match(/\[([0-3]\d)\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/((?:19|20)\d{2}):([0-2]\d):([0-5]\d):([0-5]\d)\s-([0-2]\d{3})\]/);
+		if (datestring!=null){
+			var year = datestring[3],
+				month = months[datestring[2]],
+				day = datestring[1],
+				hours = datestring[4],
+				minutes = datestring[5],
+				seconds = datestring[6];
+			timestamp = new Date(year, month, day, hours, minutes, seconds);
+		} else {
+			// Error datestring format
+			datestring = log[i].match(/\[((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s[0-3]\d\s[0-5]\d:[0-5]\d:[0-5]\d.\d{6}\s(?:19|20)\d{2})\]/);
+			timestamp = new Date(datestring[1]);
+		}
+		if (slice_start==null) slice_start = timestamp;
+		else if (diff_minutes(slice_start,timestamp) > 500 && slice_size >= 100){
+			// Xhrs of logs added, prune tree through splitting/deletion
+			prune(tree,slice_size);
+			reset(tree);
+			slice_start = timestamp;
+			slice_size = 0;
+		} ++slice_size;
+		/**/
 		var node = tree;
-		var str = "";
 		while (node.p_word!=null){
 			node.value.push(log[i]);
-			if (log[i].substring(node.p_word[0] ,parseInt(node.p_word[0])+node.p_word[1].length) == node.p_word[1]){
-				str += "\x1b[32m"+node.p_word+"\x1b[0m";
-				node = node.left;
-			} else {
-				str += "\x1b[31m"+node.p_word+"\x1b[0m";
-				node = node.right;
-			}
-			if (node.p_word!=null) str += " -> "
+			node.new_vals+=1;
+			node = (log[i].substring(node.p_word[0],parseInt(node.p_word[0])+node.p_word[1].length)==node.p_word[1]) ? node.left: node.right;
 		}
-		if (str != "")
-		if (sorted[str]==null) sorted[str]=[log[i]];
-		else sorted[str].push(log[i]);
-		//console.log(colors['Y'],log[i]);
+		node.value.push(log[i]);
+		node.new_vals+=1;
 	}
-	/**/
-	for (i in sorted){
-		console.log(i+": ");
-		console.log(leaves(parse(sorted[i],2048,5,0.12)));
-	}
-	console.log("Leaf nodes used to sort:\t%d",Object.keys(sorted).length);
-	/**/
+	if (slice_size>=100) prune(tree,slice_size);
 }
 
 var log_length = 2048;
@@ -224,7 +289,11 @@ var min_num_logs = 10;
 var input_access = "";
 var input_other_vhosts_access = "";
 var input_error = "";
-
+/**
+process.argv.forEach(function (val, index, array) {
+  console.log(index + ': ' + val);
+});
+/**/
 for(var i = 1; i<15; ++i){
 	input_access += fs.readFileSync('apache2/access.log.'+i).toString();
 	input_other_vhosts_access += fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
@@ -232,23 +301,80 @@ for(var i = 1; i<15; ++i){
 }
 
 var test_access = fs.readFileSync('apache2/access.log').toString().split("\n");
-var test_other_vhosts_access = fs.readFileSync('apache2/other_vhosts_access.log').toString().split("\n");
+var test_other_vhosts_access="";// = fs.readFileSync('apache2/other_vhosts_access.log').toString().split("\n");
+for(var i = 4; i<5; ++i){
+	test_other_vhosts_access += fs.readFileSync('apache2/other_vhosts_access.log.'+i).toString();
+}
 var test_error = fs.readFileSync('apache2/error.log').toString().split("\n");
-
-console.log(colors['G'],"ACCESS LOGS\n-----------");
-var tree_a = parse(input_access.split("\n"),log_length,min_num_logs);
-console.log(toString(tree_a)+"\nDEPTH:\t"+height(tree_a));
-classify(test_access,tree_a);
-console.log("Total leaves (categories):\t%d",leaves(tree_a).length);
 /**/
+console.log(colors['G'],"ACCESS LOGS\n-----------");
+var tree_a = parse(test_access,log_length,min_num_logs);
+console.log(toString(tree_a)+"\nDEPTH:\t"+height(tree_a));
+classify(input_access.split("\n"),tree_a);
+console.log("Total leaves (categories):\t"+leaves(tree_a).length+"\nnew tree:");
+console.log(toString(tree_a));
+/**
+var tmp = 0;
+var leaf = leaves(tree_a);
+for(i in leaf) tmp += leaf[i].length;
+console.log(tmp+" == "+tree_a.value.length);
+
+for (x in tree_a.value)
+	var seen = false;
+	for (y in leaf)
+		if (leaf[y].includes(tree_a.value[x])) seen = true;
+	if (!seen) console.log(tree_a.value[x]);
+/**/
+/**
 console.log(colors['B'],"OTHERV LOGS\n-----------");
 var tree_o = parse(input_other_vhosts_access.split("\n"),log_length,min_num_logs);
 console.log(toString(tree_o)+"\nDEPTH:\t"+height(tree_o));
-classify(test_other_vhosts_access,tree_o);
-console.log("Total leaves (categories):\t%d",leaves(tree_o).length);
+classify(test_other_vhosts_access.split("\n"),tree_o);
+console.log("Total leaves (categories):\t"+leaves(tree_o).length+"\nnew tree:");
+console.log(toString(tree_o));
+/**
 console.log(colors['R'],"ERROR LOGS\n----------");
 var tree_e = parse(input_error.split("\n"),log_length,min_num_logs);
 console.log(toString(tree_e)+"\nDEPTH:\t"+height(tree_a));
 classify(test_error,tree_e);
-console.log("Total leaves (categories):\t%d",leaves(tree_e).length);
+console.log("Total leaves (categories):\t"+leaves(tree_e).length);
 /**/
+
+function plot_html(path,tree){
+	var node = tree;
+	if (path != "/null")
+	for (var i = 1; i < path.length; ++i)
+	node = (path.charAt(i)=='1') ? node.left: node.right;
+	var output = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Corresponding Logs</title></head><body><p>';
+	for (x in node.value)
+	output += node.value[x]+"<br>";
+	return output+"</p></body></html>";
+}
+
+function toHTML(tree,path=""){
+	var output = "";
+	if (tree == null) return output;
+	var len = tree.value.length;
+	output += '<li><a href="'+((path=="")?null:path)+'">';
+	output += "Logs: "+len+"<br>";
+	if (tree.p_word != null){
+		output += "Pos: "+tree.p_word[0]+"<br>";
+		output += "Word: '"+tree.p_word[1]+"'";
+	}
+	output += "</a>";
+	if (tree.left != null)
+		output += "<ul>"+toHTML(tree.left,path+'1');
+	if (tree.right != null)
+		output += toHTML(tree.right,path+'0')+"</ul>";
+	output += "</li>";
+	return output;
+}
+
+var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="style.css"><title>Binary (p,n)-gram Tree</title></head><body><div class="tree">';
+html+= "<ul>"+toHTML(tree_a)+"</ul>";
+html+= "</div></body></html>";
+
+app.use(express.static('public'));
+app.get('*', (req, res, next) => (req.url === '/') ? next(): res.send(plot_html(req.url,tree_a)));
+app.get('/', (req, res) => res.send(html));
+app.listen(3000, () => console.log('Example app listening on port 3000!'));
