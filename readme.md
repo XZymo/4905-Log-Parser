@@ -52,7 +52,7 @@ For deployment, this app would require configuration for constant access to your
 
 * [node.js](https://nodejs.org/en/) - JavaScript run-time environment
 * [express.js](https://expressjs.com/) - The web API framework used
-* [npm](https://www.npmjs.com/) - JavaScript package anager
+* [npm](https://www.npmjs.com/) - JavaScript package manager
 * [github](https://github.com/) - Repository and code management system
 
 ## Contributing
