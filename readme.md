@@ -57,7 +57,7 @@ For deployment, this app would require configuration for constant access to your
 
 ## Contributing
 
-This application was developed without any contributions other than that of the author. For details on the process for submitting pull requests, please email [daniel.fitzhenry@carleton](daniel.fitzhenry@carleton.ca).
+This application was developed without any contributions other than that of the author. For details on the process for submitting pull requests, please email [daniel.fitzhenry@carleton.ca](mailto:daniel.fitzhenry@carleton.ca).
 
 ## Versioning
 
