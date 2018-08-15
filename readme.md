@@ -65,7 +65,7 @@ See [package.json](https://github.com/XZymo/4905-Log-Parser/blob/master/package.
 
 ## Author
 
-* **Daniel Fitzhenry** - *Initial work* - [XZymo](https://github.com/XZymo)
+* **Daniel Fitzhenry** - [XZymo](https://github.com/XZymo)
 
 See also the list of [contributors](https://github.com/XZymo/4905-Log-Parser/graphs/contributors) who participated in this project.
 
@@ -74,5 +74,5 @@ See also the list of [contributors](https://github.com/XZymo/4905-Log-Parser/gra
 [ISC](https://en.wikipedia.org/wiki/ISC_license)
 
 ## Acknowledgments
-
-Based on the algorithm as proposed by Abdulrahman Hijazi in his Ph.D. thesis “[Network Traffic Characterization Using (p, n)-grams Packet Representation](http://people.scs.carleton.ca/~soma/pubs/students/abdulrahman-hijazi-phd.pdf)”
+* Abdulrahman Hijazi - his Ph.D. thesis “[Network Traffic Characterization Using (p, n)-grams Packet Representation](http://people.scs.carleton.ca/~soma/pubs/students/abdulrahman-hijazi-phd.pdf)”
+* Philipp Khn - Binary Tree CSS [https://codepen.io/philippkuehn/pen/QbrOaN ] (https://codepen.io/philippkuehn/pen/QbrOaN)

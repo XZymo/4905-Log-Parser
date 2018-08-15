@@ -2,22 +2,6 @@ var fs = require('fs');
 const express = require('express');
 const app = express();
 
-/** APACHE LOG FORMAT: 
-%h		IP address of the client (remote host)
-%l		the RFC 1413 identity of the client determined by identd on the clients machine. "-" indicates that the requested information is unavailable.
-%u		The userid of the person requesting the document as determined by HTTP authentication.
-%t		The time that the request was received. [day/month/year:hour:minute:second zone]
-%r		The request line from the client. "method_used requested_resource protocol_used" | "%m %U%q %H"
-%>s		Status code that the server sends back to the client.
-%b		The size of the object returned to the client, not including the response headers. (payload)
-%{ref}i	The "Referer" (sic) HTTP request header. This gives the site that the client reports having been referred from IN QUOTES. "-"
-%{usr}i	The User-Agent HTTP request header. This is the identifying information that the client browser reports about itself IN QUOTES.
-Ex.:
-	%h %l %u [%t] "%m %U%q %H" %>s $b "%{ref}i" "%{usr}i"
-	73.41.227.33 - - [09/May/2018:06:45:10 -0400] "GET /wp-login.php HTTP/1.1" 404 7985 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1"
-
-**/
-
 // Binary tree node
 function Node(val){
   this.value = val;
@@ -74,8 +58,7 @@ function prune(tree,size,itr=0,threshold=0.02){
 		//console.log("LEAF -> "+tree.new_vals/size);
 		if (tree.new_vals/size > threshold){
 			var str = tree.value.length+" logs split ";
-			shuffle(tree.value);
-			tree = parse(tree.value);
+			tree = parse(tree.value,2048,1);
 			console.log(str+((tree.p_word==null)?"Failed to identify (p,n)-gram.":"-> "+tree.p_word));
 		}
 	}
@@ -117,13 +100,6 @@ function toString(tree,layers=0){
 function diff_minutes(dt2, dt1) {
 	var diff =(dt2.getTime() - dt1.getTime()) / 60000;
 	return Math.abs(Math.round(diff)); 
-}
-
-function shuffle(array) {
-    for (let i = array.length - 1; i > 0; --i) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]]; // eslint-disable-line no-param-reassign
-    }
 }
 
 function selectRandom(obj,flip) {
@@ -245,8 +221,8 @@ function parse(log, maxloglen=2048, minlognum=1, stddev=0.0, flip=false){
 	return root;
 }
 
-function classify(log,tree,clear=true,windowmin=500,minslicelen=100){
-	var timestamp,slice_start=null,slice_size=0;
+function classify(log,tree,clear=true,windowmin=500,minslicelen=1){
+	var timestamp,slice_start=null,slice_size=0,slice_count=0,cache=[];
 	for(i in log) {
 		if (log[i] == ""||log[i] == "\n") continue;
 		/**/
@@ -271,11 +247,13 @@ function classify(log,tree,clear=true,windowmin=500,minslicelen=100){
 			prune(tree,slice_size);
 			reset(tree,clear);
 			slice_start = timestamp;
+			cache[++slice_count] = slice_size;
 			slice_size = 0;
 		} ++slice_size;
 		/**/
 		var node = tree;
 		while (node.p_word!=null){
+			if(log[i]===undefined) break;
 			node.value.push(log[i]);
 			node.new_vals+=1;
 			node = (log[i].substring(node.p_word[0],parseInt(node.p_word[0])+node.p_word[1].length)==node.p_word[1]) ? node.left: node.right;
@@ -284,6 +262,9 @@ function classify(log,tree,clear=true,windowmin=500,minslicelen=100){
 		node.new_vals+=1;
 	}
 	if (slice_size>=minslicelen) prune(tree,slice_size);
+	for(i in cache)
+	console.log(colors['R'],cache[i]);
+	console.log(colors['B'],slice_count);
 }
 
 var input_access = "";
@@ -304,30 +285,30 @@ var test_access = fs.readFileSync('apache2/access.log').toString().split("\n");
 var test_other_vhosts_access = fs.readFileSync('apache2/other_vhosts_access.log').toString().split("\n");
 var test_error = fs.readFileSync('apache2/error.log').toString().split("\n");
 
-/**/
-console.log(colors['G'],"ACCESS LOGS\n-----------");
-var tree_a = parse(test_access);
-console.log(toString(tree_a)+"\nDEPTH:\t"+height(tree_a));
-console.log("Total leaves (categories):\t"+leaves(tree_a).length);
-classify(input_access.split("\n"),tree_a);
-console.log("New Tree:\n"+toString(tree_a)+"\nDEPTH:\t"+height(tree_a));
-console.log("Total leaves (categories):\t"+leaves(tree_a).length);
 /**
+console.log(colors['G'],"ACCESS LOGS\n-----------");
+var tree = parse(test_access,2048,1);
+console.log(toString(tree)+"\nDEPTH:\t"+height(tree));
+console.log("Total leaves (categories):\t"+leaves(tree).length);
+classify(input_access.split("\n"),tree,true);
+console.log("New Tree:\n"+toString(tree)+"\nDEPTH:\t"+height(tree));
+console.log("Total leaves (categories):\t"+leaves(tree).length);
+/**/
 console.log(colors['B'],"OTHERV LOGS\n-----------");
-var tree_o = parse(test_other_vhosts_access,2048,1,0.1);
-console.log(toString(tree_o)+"\nDEPTH:\t"+height(tree_o));
-console.log("Total leaves (categories):\t"+leaves(tree_o).length);
-classify(input_other_vhosts_access.split("\n"),tree_o);
-console.log("New Tree:\n"+toString(tree_o)+"\nDEPTH:\t"+height(tree_o));
-console.log("Total leaves (categories):\t"+leaves(tree_o).length);
+var tree = parse(test_other_vhosts_access,2048,1);
+console.log(toString(tree)+"\nDEPTH:\t"+height(tree));
+console.log("Total leaves (categories):\t"+leaves(tree).length);
+classify(input_other_vhosts_access.split("\n"),tree,true);
+console.log("New Tree:\n"+toString(tree)+"\nDEPTH:\t"+height(tree));
+console.log("Total leaves (categories):\t"+leaves(tree).length);
 /**
 console.log(colors['R'],"ERROR LOGS\n----------");
-var tree_e = parse(test_error,2048,1,0.3);
-console.log(toString(tree_e)+"\nDEPTH:\t"+height(tree_e));
-console.log("Total leaves (categories):\t"+leaves(tree_e).length);
-classify(input_error.split("\n"),tree_e,false);
-console.log("New Tree:\n"+toString(tree_e)+"\nDEPTH:\t"+height(tree_e));
-console.log("Total leaves (categories):\t"+leaves(tree_e).length);
+var tree = parse(test_error,2048,1,0.3);
+console.log(toString(tree)+"\nDEPTH:\t"+height(tree));
+console.log("Total leaves (categories):\t"+leaves(tree).length);
+classify(input_error.split("\n"),tree,true);
+console.log("New Tree:\n"+toString(tree)+"\nDEPTH:\t"+height(tree));
+console.log("Total leaves (categories):\t"+leaves(tree).length);
 /**/
 
 function plot_html(path,tree){
@@ -352,19 +333,19 @@ function toHTML(tree,path=""){
 		output += "Word: '"+tree.p_word[1]+"'";
 	}
 	output += "</a>";
-	if (tree.left != null)
-		output += "<ul>"+toHTML(tree.left,path+'1');
 	if (tree.right != null)
-		output += toHTML(tree.right,path+'0')+"</ul>";
+		output += "<ul>"+toHTML(tree.right,path+'0');
+	if (tree.left != null)
+		output += toHTML(tree.left,path+'1')+"</ul>";
 	output += "</li>";
 	return output;
 }
 
 var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="style.css"><title>Binary (p,n)-gram Tree</title></head><body><div class="tree">';
-html+= "<ul>"+toHTML(tree_a)+"</ul>";
+html+= "<ul>"+toHTML(tree)+"</ul>";
 html+= "</div></body></html>";
 
 app.use(express.static('public'));
-app.get('*', (req, res, next) => (req.url === '/') ? next(): res.send(plot_html(req.url,tree_a)));
+app.get('*', (req, res, next) => (req.url === '/') ? next(): res.send(plot_html(req.url,tree)));
 app.get('/', (req, res) => res.send(html));
 app.listen(3000, () => console.log('Application available @ http://localhost:3000'));
